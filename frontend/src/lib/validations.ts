@@ -57,31 +57,54 @@ export const subtaskSchema = z.object({
   completed: z.boolean(),
 });
 
-export const taskCreateSchema = z.object({
+/**
+ * Task field schemas, in one place and deliberately free of any .default().
+ *
+ * That matters for the update schema: Zod 4 still injects a field's default
+ * through .partial(), so deriving the PATCH schema from the create schema made
+ * every edit write description:"", dueDate:null, tags:[], subtasks:[],
+ * recurrence:"none", isImportant:false and categoryId:null over the stored
+ * task. Create applies its defaults explicitly below; update must not.
+ */
+const taskShape = {
   title: z.string().trim().min(1, "Title is required").max(140),
-  description: z.string().trim().max(2000).default(""),
-  categoryId: z.string().max(40).nullable().default(null),
-  // Deliberately no .default(): the create route has to be able to tell
-  // "caller did not choose" apart from "caller chose medium", so it can fall
-  // back to the account's settings.defaultPriority.
+  description: z.string().trim().max(2000),
+  categoryId: z.string().max(40).nullable(),
+  // No default: the create route has to be able to tell "caller did not
+  // choose" apart from "caller chose medium", so it can fall back to the
+  // account's settings.defaultPriority.
   priority: z.enum(["low", "medium", "high"]).optional(),
-  status: z.enum(["todo", "done"]).default("todo"),
-  dueDate: dateString.nullable().default(null),
-  dueTime: timeString.nullable().default(null),
-  reminder: timeString.nullable().default(null),
-  tags: tags.default([]),
-  subtasks: z.array(subtaskSchema).max(50).default([]),
-  isImportant: z.boolean().default(false),
-  recurrence: z
-    .enum(["none", "daily", "weekly", "monthly", "yearly"])
-    .default("none"),
+  status: z.enum(["todo", "done"]),
+  dueDate: dateString.nullable(),
+  dueTime: timeString.nullable(),
+  reminder: timeString.nullable(),
+  tags,
+  subtasks: z.array(subtaskSchema).max(50),
+  isImportant: z.boolean(),
+  recurrence: z.enum(["none", "daily", "weekly", "monthly", "yearly"]),
+};
+
+export const taskCreateSchema = z.object({
+  title: taskShape.title,
+  description: taskShape.description.default(""),
+  categoryId: taskShape.categoryId.default(null),
+  priority: taskShape.priority,
+  status: taskShape.status.default("todo"),
+  dueDate: taskShape.dueDate.default(null),
+  dueTime: taskShape.dueTime.default(null),
+  reminder: taskShape.reminder.default(null),
+  tags: taskShape.tags.default([]),
+  subtasks: taskShape.subtasks.default([]),
+  isImportant: taskShape.isImportant.default(false),
+  recurrence: taskShape.recurrence.default("none"),
 });
 
 /**
- * PATCH accepts any subset. Every key is optional, and an absent key is never
- * written, so partial updates cannot blank out fields.
+ * PATCH accepts any subset. Every key is optional and none carries a default, so
+ * an absent key is never written and a partial update cannot blank out fields.
  */
-export const taskUpdateSchema = taskCreateSchema
+export const taskUpdateSchema = z
+  .object(taskShape)
   .partial()
   .extend({ isArchived: z.boolean().optional() });
 
