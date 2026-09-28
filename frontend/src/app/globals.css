@@ -1,78 +1,279 @@
 @import "tailwindcss";
 
+/* Dark mode is driven by a class on <html> so the stored preference wins over
+   the OS setting; see ThemeScript in app/layout.tsx. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ------------------------------------------------------------------
+   Design tokens extracted from the Figma file
+   "To-Do list App (Community)" - key PC8WDE4oo1zDwXEpwTT9ka
+   ------------------------------------------------------------------ */
+
+/*
+  Brand colours are fixed by the design and deliberately do NOT flip in dark
+  mode: the purple-to-blue gradient is the product's identity.
+*/
+@theme {
+  --font-sans: var(--font-inter), "Segoe UI", ui-sans-serif, system-ui,
+    -apple-system, sans-serif;
+
+  /* Canvas gradient: #ea52f8 0% -> #7a5cfb 54% -> #3c8aff 100% */
+  --color-brand-magenta: #ea52f8;
+  --color-brand-purple: #7a5cfb;
+  --color-brand-blue: #3c8aff;
+  --color-fab: #8a32cb;
+
+  --radius-swatch: 5px;
+  --radius-tile: 10px;
+  --radius-field: 12px;
+  --radius-banner: 15px;
+  --radius-blob: 16.4px;
+  --radius-sheet: 28px;
+}
+
+/*
+  Semantic surface and text colours. Declared with `inline` so the generated
+  utilities resolve to the runtime variable, which is what lets one class
+  serve both themes.
+*/
+@theme inline {
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-raised: var(--raised);
+  --color-sunken: var(--sunken);
+  --color-line: var(--line);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-faint: var(--faint);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-danger: var(--danger);
+  --color-success: var(--success);
+}
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --canvas: #efefef;
+  --surface: #ffffff;
+  --raised: #ffffff;
+  --sunken: #f4f4f7;
+  --line: #e7e7ec;
+  --ink: #282c3f;
+  --muted: #6b6b6b;
+  --faint: #aaaaaa;
+  --accent: #8a32cb;
+  --accent-ink: #ffffff;
+  --danger: #e8402a;
+  --success: #3aaa35;
+  --shadow-sheet: 0 -8px 30px rgba(0, 0, 0, 0.08);
+  --shadow-card: 0 1px 2px rgba(20, 20, 40, 0.05), 0 8px 24px rgba(20, 20, 40, 0.05);
+  --ring-color: #7a5cfb;
+  color-scheme: light;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+.dark {
+  --canvas: #0b0b10;
+  --surface: #15151c;
+  --raised: #1e1e27;
+  --sunken: #101017;
+  --line: #2a2a36;
+  --ink: #ececf3;
+  --muted: #a0a0b0;
+  --faint: #6e6e80;
+  --accent: #b06cf0;
+  --accent-ink: #12061d;
+  --danger: #ff6a52;
+  --success: #4fc94f;
+  --shadow-sheet: 0 -8px 30px rgba(0, 0, 0, 0.5);
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.3);
+  --ring-color: #b06cf0;
+  color-scheme: dark;
 }
 
+html,
 body {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   margin: 0;
   padding: 0;
   overflow-x: hidden;
 }
 
-/* Custom glassmorphism styles */
-.glass-card {
-  backdrop-filter: blur(10px);
-  background: rgba(255, 255, 255, 0.25);
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+body {
+  background: var(--canvas);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
 }
 
-.glass-button {
-  backdrop-filter: blur(10px);
-  background: rgba(255, 255, 255, 0.2);
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  transition: all 0.3s ease;
+/* The gradient canvas behind both screens. */
+.app-canvas {
+  background: linear-gradient(
+    58deg,
+    var(--color-brand-magenta) 0%,
+    var(--color-brand-purple) 54%,
+    var(--color-brand-blue) 100%
+  );
 }
 
-.glass-button:hover {
-  background: rgba(255, 255, 255, 0.3);
-  transform: translateY(-2px);
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+/* Progress banner gradient. */
+.banner-gradient {
+  background: linear-gradient(45deg, #3f4e99 0%, #874dbc 60%, #d14cdf 100%);
 }
 
-.gradient-bg {
-  background: linear-gradient(135deg, #f6c23e 0%, #f8d7da 50%, #e9ecef 100%);
-  min-height: 100vh;
+/* 8px dot grid, #cbdfee at 18%, used in the top-right corner. */
+.dot-grid {
+  background-image: radial-gradient(
+    circle at center,
+    color-mix(in srgb, #cbdfee 18%, transparent) 4px,
+    transparent 4.5px
+  );
+  background-size: 22px 22px;
+  background-position: 3px 3px;
 }
 
-/* Custom scrollbar */
-::-webkit-scrollbar {
-  width: 8px;
+/* The white content sheet that overlaps the gradient. */
+.sheet {
+  background: var(--surface);
+  box-shadow: var(--shadow-sheet);
 }
 
-::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 10px;
+.sheet-handle {
+  width: 77px;
+  height: 5px;
+  border-radius: 999px;
+  background: #5e5e5e;
 }
 
-::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.3);
-  border-radius: 10px;
+/* Circular progress ring used on the progress screen. */
+.ring {
+  --pct: 0;
+  background: conic-gradient(
+    var(--ring-color) calc(var(--pct) * 1%),
+    color-mix(in srgb, var(--ink) 12%, transparent) 0
+  );
+  border-radius: 9999px;
+  display: grid;
+  place-items: center;
 }
 
-::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.5);
+.ring::after {
+  content: "";
+  width: 72%;
+  height: 72%;
+  border-radius: 9999px;
+  background: var(--surface);
 }
 
-/* Animation classes */
-.slide-in {
-  animation: slideIn 0.3s ease-out;
+/* ------------------------------------------------------------------
+   Shell primitives
+   ------------------------------------------------------------------ */
+
+.card {
+  background: var(--raised);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-tile);
+  box-shadow: var(--shadow-card);
 }
 
-@keyframes slideIn {
+/* iOS safe area, so the bottom bar clears the home indicator. */
+.pb-safe {
+  padding-bottom: max(env(safe-area-inset-bottom), 0px);
+}
+
+.pt-safe {
+  padding-top: max(env(safe-area-inset-top), 0px);
+}
+
+/* Inputs inherit the theme rather than the browser's default chrome. */
+.field {
+  width: 100%;
+  background: var(--sunken);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-field);
+  padding: 0.7rem 0.9rem;
+  color: var(--ink);
+  font-size: 0.95rem;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.field::placeholder {
+  color: var(--faint);
+}
+
+.field:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+select.field {
+  appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%),
+    linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+  background-position: calc(100% - 18px) 55%, calc(100% - 13px) 55%;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+  padding-right: 2.2rem;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  border-radius: 999px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  padding: 0.6rem 1.1rem;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: filter 0.15s ease, background-color 0.15s ease, opacity 0.15s ease;
+  white-space: nowrap;
+}
+
+.btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.btn-ghost {
+  background: transparent;
+  border-color: var(--line);
+  color: var(--ink);
+}
+
+.btn-quiet {
+  background: transparent;
+  color: var(--muted);
+  padding: 0.45rem 0.7rem;
+}
+
+.btn-quiet:hover {
+  background: var(--sunken);
+}
+
+.btn-danger {
+  background: transparent;
+  border-color: color-mix(in srgb, var(--danger) 40%, transparent);
+  color: var(--danger);
+}
+
+.btn:not(:disabled):hover {
+  filter: brightness(1.06);
+}
+
+/* Keyboard focus is always visible, but only for keyboard users. */
+:where(button, a, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@keyframes float-in {
   from {
     opacity: 0;
-    transform: translateY(20px);
+    transform: translateY(12px);
   }
   to {
     opacity: 1;
@@ -80,15 +281,72 @@ body {
   }
 }
 
-.fade-in {
-  animation: fadeIn 0.5s ease-out;
-}
-
-@keyframes fadeIn {
+@keyframes rise {
   from {
     opacity: 0;
+    transform: translateY(6px);
   }
   to {
     opacity: 1;
+    transform: translateY(0);
   }
+}
+
+@keyframes sheet-up {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+.animate-float-in {
+  animation: float-in 0.35s ease-out both;
+}
+
+.animate-rise {
+  animation: rise 0.25s ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-float-in,
+  .animate-rise {
+    animation: none;
+  }
+
+  dialog.sheet-dialog[open] {
+    animation: none;
+  }
+}
+
+/* Scrollbars inside scrollable regions. */
+.sheet-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
+}
+
+.sheet-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+.sheet-scroll::-webkit-scrollbar-thumb {
+  background: var(--line);
+  border-radius: 999px;
+}
+
+.sheet-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
