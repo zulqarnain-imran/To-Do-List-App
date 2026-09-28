@@ -22,12 +22,6 @@ import type {
 
 const uri = process.env.MONGODB_URI;
 
-if (!uri) {
-  throw new Error(
-    "MONGODB_URI is not set. Add it to .env.local (see .env.example) and to your Vercel environment variables.",
-  );
-}
-
 export const DB_NAME = process.env.MONGODB_DB || "todo_app";
 
 declare global {
@@ -37,7 +31,18 @@ declare global {
 
 function clientPromise(): Promise<MongoClient> {
   if (!globalThis.__mongoClientPromise) {
-    const client = new MongoClient(uri as string, {
+    // Checked here rather than at module scope on purpose. Throwing at import
+    // time aborts "next build" while it collects page data, so a build machine
+    // that has no database credentials would fail before it could deploy.
+    // Deferring it means the build succeeds and a missing variable shows up as
+    // a clear 500 on the first request that actually needs the database.
+    if (!uri) {
+      throw new Error(
+        "MONGODB_URI is not set. Add it to .env.local (see .env.example) and to your Vercel project environment variables.",
+      );
+    }
+
+    const client = new MongoClient(uri, {
       tls: process.env.MONGODB_TLS === "false" ? false : true,
       maxPoolSize: 5,
       minPoolSize: 0,
