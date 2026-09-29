@@ -2,31 +2,46 @@ import { NextResponse } from "next/server";
 import { getUsers } from "@/lib/mongodb";
 import { verifyPassword } from "@/lib/password";
 import { createSession } from "@/lib/session";
-import { handle, fail, json } from "@/lib/api";
+import { handle, fail, json , readJson} from "@/lib/api";
 import { loginSchema } from "@/lib/validations";
 import { DEFAULT_SETTINGS } from "@/lib/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// Compared against when no account matches, so that a wrong email and a wrong
-// password take the same amount of time and cannot be told apart.
-const DUMMY_HASH = "$2b$12$abcdefghijklmnopqrstuuKZf4Y3nRJkXBQXqYfCzT0m1sM2vO";
+// A real, valid bcrypt hash of a value nobody knows. It exists so that a login
+// for an unknown address still performs a full 12-round comparison and takes
+// about as long as a real one. The previous placeholder was not a well-formed
+// hash, so bcryptjs bailed out immediately and a wrong address answered far
+// faster than a wrong password, which leaks which addresses are registered.
+const DUMMY_HASH = "$2b$12$vpUDLr/Si4FKpWnaYYerzOsDNkei9XiH4eBPZr5DD1CByWpbq9wHq";
 
 /** POST /api/auth/login */
 export async function POST(request: Request) {
   try {
-    const body = loginSchema.parse(await request.json());
+    const body = loginSchema.parse(await readJson(request));
 
     const users = await getUsers();
     const user = await users.findOne({ email: body.email });
 
-    const valid = await verifyPassword(
-      body.password,
-      user?.passwordHash ?? DUMMY_HASH,
-    );
+    // A corrupt or hash-format change in a stored row must read as a failed
+    // sign-in, never as a server error. bcryptjs can throw on a malformed hash
+    // and an unguarded throw here would turn "wrong password" into a 500.
+    let valid = false;
+    try {
+      valid = await verifyPassword(body.password, user?.passwordHash ?? DUMMY_HASH);
+    } catch (cause) {
+      console.error(
+        "[api:auth/login] password verification threw:",
+        cause instanceof Error ? cause.name : "NonError",
+      );
+    }
 
     if (!user || !valid) {
+      // Outcome only. Deliberately no email, no user id, no cookie value.
+      console.error(
+        `[api:auth/login] rejected: accountFound=${Boolean(user)} passwordMatch=${valid}`,
+      );
       return fail("Incorrect email or password", 401);
     }
 
@@ -39,6 +54,7 @@ export async function POST(request: Request) {
     };
 
     await createSession(sessionUser);
+    console.error("[api:auth/login] succeeded");
 
     return json({ user: sessionUser });
   } catch (error) {

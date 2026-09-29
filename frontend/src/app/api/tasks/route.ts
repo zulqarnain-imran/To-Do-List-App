@@ -1,5 +1,5 @@
 import { getTasks, insertDoc } from "@/lib/mongodb";
-import { handle, json, requireUser } from "@/lib/api";
+import { handle, json, requireUser , readJson} from "@/lib/api";
 import { taskCreateSchema } from "@/lib/validations";
 import { serializeTask } from "@/lib/serialize";
 import { TASK_CAP } from "@/lib/constants";
@@ -32,7 +32,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const user = await requireUser();
-    const body = taskCreateSchema.parse(await request.json());
+    const body = taskCreateSchema.parse(await readJson(request));
 
     // The defaults already travel on the session, so choosing one is free.
     // "Add a task" therefore needs no extra database round trip.

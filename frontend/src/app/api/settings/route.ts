@@ -1,6 +1,6 @@
 import { ObjectId } from "mongodb";
 import { getUsers } from "@/lib/mongodb";
-import { handle, json, requireUser, fail } from "@/lib/api";
+import { handle, json, requireUser, fail , readJson} from "@/lib/api";
 import { settingsUpdateSchema } from "@/lib/validations";
 import { syncSessionIdentity } from "@/lib/session";
 import { DEFAULT_SETTINGS } from "@/lib/types";
@@ -17,7 +17,7 @@ export const dynamic = "force-dynamic";
 export async function PATCH(request: Request) {
   try {
     const user = await requireUser();
-    const body = settingsUpdateSchema.parse(await request.json());
+    const body = settingsUpdateSchema.parse(await readJson(request));
 
     if (Object.keys(body).length === 0) {
       return fail("No valid fields to update", 400);

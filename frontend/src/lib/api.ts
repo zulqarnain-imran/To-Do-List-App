@@ -40,6 +40,21 @@ export function unauthorized(): NextResponse {
   return fail("Unauthorized", 401);
 }
 
+/**
+ * Parses a JSON request body, turning a malformed payload into a 400.
+ *
+ * Without this, a truncated or non-JSON body makes request.json() throw a
+ * SyntaxError, which is not a ZodError, so it would be reported as a server
+ * fault. A bad request is the caller's problem, not the server's.
+ */
+export async function readJson(request: Request): Promise<unknown> {
+  try {
+    return await request.json();
+  } catch {
+    throw new ApiError(400, "Request body must be valid JSON");
+  }
+}
+
 function isDuplicateKey(error: unknown): boolean {
   return (
     typeof error === "object" &&
@@ -48,7 +63,45 @@ function isDuplicateKey(error: unknown): boolean {
   );
 }
 
-/** Maps any thrown value onto a safe, actionable JSON response. */
+/**
+ * Removes anything credential-shaped before a value reaches a log line.
+ *
+ * A MongoParseError or a driver error can echo the connection string back, and
+ * that string contains the database password. Logs on Vercel are not a place to
+ * keep credentials, so every message and stack frame is scrubbed first.
+ */
+export function redact(input: string): string {
+  return input
+    .replace(/mongodb(\+srv)?:\/\/\S+/gi, "mongodb://[redacted]")
+    .replace(/:\/\/[^@\s/]+:[^@\s/]+@/g, "://[redacted]@")
+    .replace(/([?&](?:password|passwd|pwd)=)[^&\s]+/gi, "$1[redacted]");
+}
+
+function describe(error: unknown): { name: string; message: string; stack: string } {
+  if (error instanceof Error) {
+    return {
+      name: error.name,
+      message: redact(error.message),
+      stack: redact(error.stack ?? "").split("\n").slice(0, 5).join(" | "),
+    };
+  }
+  return { name: "NonError", message: redact(String(error)), stack: "" };
+}
+
+/** True for the driver's own error classes, matched by name rather than instanceof. */
+function isMongoError(error: unknown, ...names: string[]): boolean {
+  if (!(error instanceof Error)) return false;
+  return names.includes(error.name);
+}
+
+/**
+ * Maps any thrown value onto a safe, actionable JSON response.
+ *
+ * Genuine faults are logged with the exception class, a redacted message and a
+ * short redacted stack, so a Vercel runtime log identifies the real cause
+ * instead of a generic 500. The browser only ever sees a generic message:
+ * stack traces and driver internals stay server side.
+ */
 export function handle(error: unknown, context = "request"): NextResponse {
   if (error instanceof ApiError) return fail(error.message, error.status);
 
@@ -56,22 +109,40 @@ export function handle(error: unknown, context = "request"): NextResponse {
     return fail(firstIssue(error), 400);
   }
 
-  const message = error instanceof Error ? error.message : String(error);
-
   if (isDuplicateKey(error)) {
     return fail("That value is already taken", 409);
   }
 
-  if (/bad auth|auth failed|authentication failed/i.test(message)) {
-    console.error(`[api:${context}] database auth failed`);
+  const { name, message, stack } = describe(error);
+
+  // One greppable line first, so the failure is easy to find in Vercel logs.
+  console.error(`[api:${context}] ${name}: ${message}`);
+  if (stack) console.error(`[api:${context}] at ${stack}`);
+
+  if (/MONGODB_URI is not set/.test(message)) {
+    return fail("The server is not configured. Contact support.", 500);
+  }
+
+  if (isMongoError(error, "MongoParseError", "MongoInvalidURIError")) {
+    return fail("The server is not configured. Contact support.", 500);
+  }
+
+  if (isMongoError(error, "MongoServerError") || /auth failed|authentication failed|bad auth/i.test(message)) {
     return fail("Database authentication failed. Check MONGODB_URI.", 503);
   }
 
-  if (/server selection|ECONNREFUSED|ENOTFOUND|getaddrinfo|MongoNotConnected/i.test(message)) {
-    console.error(`[api:${context}] database unreachable`);
+  if (
+    isMongoError(
+      error,
+      "MongoServerSelectionError",
+      "MongoNetworkError",
+      "MongoNotConnectedError",
+      "MongoTopologyClosedError",
+    ) ||
+    /server selection|ECONNREFUSED|ENOTFOUND|getaddrinfo|ETIMEDOUT|connection .* timed out/i.test(message)
+  ) {
     return fail("Could not reach the database. Try again shortly.", 503);
   }
 
-  console.error(`[api:${context}]`, error);
   return fail("Something went wrong handling that request.", 500);
 }

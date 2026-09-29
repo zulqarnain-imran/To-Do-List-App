@@ -1,6 +1,6 @@
 import { ObjectId } from "mongodb";
 import { getUsers } from "@/lib/mongodb";
-import { handle, json, requireUser, fail } from "@/lib/api";
+import { handle, json, requireUser, fail , readJson} from "@/lib/api";
 import { profileUpdateSchema, changePasswordSchema } from "@/lib/validations";
 import { hashPassword, verifyPassword } from "@/lib/password";
 import { syncSessionIdentity, destroyAllSessions } from "@/lib/session";
@@ -31,7 +31,7 @@ export async function GET() {
 export async function PATCH(request: Request) {
   try {
     const user = await requireUser();
-    const body = profileUpdateSchema.parse(await request.json());
+    const body = profileUpdateSchema.parse(await readJson(request));
 
     if (Object.keys(body).length === 0) {
       return fail("No valid fields to update", 400);
@@ -89,7 +89,7 @@ export async function PATCH(request: Request) {
 export async function POST(request: Request) {
   try {
     const user = await requireUser();
-    const body = changePasswordSchema.parse(await request.json());
+    const body = changePasswordSchema.parse(await readJson(request));
 
     const users = await getUsers();
     const doc = await users.findOne({ email: user.email });

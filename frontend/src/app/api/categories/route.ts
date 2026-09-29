@@ -1,6 +1,6 @@
 import { ObjectId } from "mongodb";
 import { getCategories } from "@/lib/mongodb";
-import { handle, json, requireUser, fail, ApiError } from "@/lib/api";
+import { handle, json, requireUser, fail, ApiError , readJson} from "@/lib/api";
 import { categoryCreateSchema } from "@/lib/validations";
 import { serializeCategory } from "@/lib/serialize";
 
@@ -23,7 +23,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const user = await requireUser();
-    const body = categoryCreateSchema.parse(await request.json());
+    const body = categoryCreateSchema.parse(await readJson(request));
 
     const categories = await getCategories();
     const now = new Date();

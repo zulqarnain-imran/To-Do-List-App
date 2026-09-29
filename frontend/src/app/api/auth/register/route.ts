@@ -2,7 +2,7 @@ import { ObjectId } from "mongodb";
 import { getCategories, getUsers, insertDoc } from "@/lib/mongodb";
 import { hashPassword } from "@/lib/password";
 import { createSession } from "@/lib/session";
-import { handle, fail, json } from "@/lib/api";
+import { handle, fail, json , readJson} from "@/lib/api";
 import { registerSchema } from "@/lib/validations";
 import { DEFAULT_CATEGORIES } from "@/lib/categories";
 import { DEFAULT_SETTINGS } from "@/lib/types";
@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
 /** POST /api/auth/register */
 export async function POST(request: Request) {
   try {
-    const body = registerSchema.parse(await request.json());
+    const body = registerSchema.parse(await readJson(request));
 
     const users = await getUsers();
 
