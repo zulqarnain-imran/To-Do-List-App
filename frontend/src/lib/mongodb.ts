@@ -43,10 +43,12 @@ function clientPromise(): Promise<MongoClient> {
     }
 
     const client = new MongoClient(uri, {
-      tls: process.env.MONGODB_TLS === "false" ? false : true,
-      maxPoolSize: 5,
+      maxPoolSize: 1,
       minPoolSize: 0,
-      serverSelectionTimeoutMS: 10_000,
+      serverSelectionTimeoutMS: 20_000,
+      connectTimeoutMS: 20_000,
+      socketTimeoutMS: 20_000,
+      retryReads: true,
       retryWrites: true,
     });
     globalThis.__mongoClientPromise = client.connect();
