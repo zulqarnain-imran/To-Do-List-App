@@ -19,7 +19,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    const user = await requireUser();
+    const user = await requireUser(request);
     const { id } = await params;
 
     const _id = objectId(id);
@@ -65,11 +65,11 @@ export async function PATCH(
  * pointing at an id that no longer resolves.
  */
 export async function DELETE(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    const user = await requireUser();
+    const user = await requireUser(request);
     const { id } = await params;
 
     const _id = objectId(id);

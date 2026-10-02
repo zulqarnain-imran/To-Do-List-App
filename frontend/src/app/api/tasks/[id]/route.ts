@@ -1,6 +1,6 @@
 import { ObjectId } from "mongodb";
 import { getTasks } from "@/lib/mongodb";
-import { handle, json, requireUser, fail } from "@/lib/api";
+import { handle, json, requireUser, fail, readJson } from "@/lib/api";
 import { taskUpdateSchema } from "@/lib/validations";
 import { serializeTask } from "@/lib/serialize";
 import { addDays, addMonths, fromKey, todayKey, toKey } from "@/lib/date";
@@ -59,19 +59,19 @@ function nextOccurrence(
   return toKey(next);
 }
 
-/** PATCH /api/tasks/:id — partial update, only the keys that were sent. */
+/** PATCH /api/tasks/:id â€” partial update, only the keys that were sent. */
 export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    const user = await requireUser();
+    const user = await requireUser(request);
     const { id } = await params;
 
     const _id = objectId(id);
     if (!_id) return fail("Task not found", 404);
 
-    const body = taskUpdateSchema.parse(await request.json());
+    const body = taskUpdateSchema.parse(await readJson(request));
     if (Object.keys(body).length === 0) {
       return fail("No valid fields to update", 400);
     }
@@ -150,7 +150,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    const user = await requireUser();
+    const user = await requireUser(request);
     const { id } = await params;
 
     const _id = objectId(id);

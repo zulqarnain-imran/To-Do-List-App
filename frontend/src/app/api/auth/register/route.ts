@@ -2,7 +2,8 @@ import { ObjectId } from "mongodb";
 import { getCategories, getUsers, insertDoc } from "@/lib/mongodb";
 import { hashPassword } from "@/lib/password";
 import { createSession } from "@/lib/session";
-import { handle, fail, json , readJson} from "@/lib/api";
+import { handle, fail, json , readJson, enforceRateLimit} from "@/lib/api";
+import { clientIp, RULES } from "@/lib/rate-limit";
 import { registerSchema } from "@/lib/validations";
 import { DEFAULT_CATEGORIES } from "@/lib/categories";
 import { DEFAULT_SETTINGS } from "@/lib/types";
@@ -13,6 +14,18 @@ export const dynamic = "force-dynamic";
 /** POST /api/auth/register */
 export async function POST(request: Request) {
   try {
+    // Caps automated account creation. The ceiling is per address and
+    // deliberately loose, because mobile carrier NAT in Pakistan puts a great
+    // many genuine users behind a single public IP and a tight limit here would
+    // lock out real sign-ups rather than bots.
+    const blocked = await enforceRateLimit(
+      "register:ip",
+      clientIp(request),
+      RULES.registerPerIp,
+      "Too many accounts created from this network. Please try again later.",
+    );
+    if (blocked) return blocked;
+
     const body = registerSchema.parse(await readJson(request));
 
     const users = await getUsers();

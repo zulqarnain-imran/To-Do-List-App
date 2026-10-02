@@ -79,6 +79,24 @@ export interface CategoryDocument {
   updatedAt: Date;
 }
 
+/**
+ * A rolling-window request counter.
+ *
+ * One document per (bucket, identifier). The window slides: every attempt
+ * pushes `expiresAt` out, so `count` is always "attempts in the last N seconds".
+ * A TTL index on `expiresAt` reaps the document once the window has been idle
+ * for long enough that the counter is irrelevant.
+ *
+ * The identifier is a truncated SHA-256 digest, never the raw email or IP, so
+ * this collection cannot become a list of who tried to sign in.
+ */
+export interface RateLimitDocument {
+  _id: string;
+  bucket: string;
+  count: number;
+  expiresAt: Date;
+}
+
 export interface SessionDocument {
   _id: ObjectId;
   userId: string;

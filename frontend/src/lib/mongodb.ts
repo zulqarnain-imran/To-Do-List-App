@@ -9,6 +9,7 @@ import type {
   TaskDocument,
   CategoryDocument,
   SessionDocument,
+  RateLimitDocument,
 } from "./types";
 
 /**
@@ -87,6 +88,11 @@ export async function getSessions(): Promise<Collection<SessionDocument>> {
   return (await getDb()).collection<SessionDocument>("sessions");
 }
 
+export async function getRateLimits(): Promise<Collection<RateLimitDocument>> {
+  await ensureIndexes();
+  return (await getDb()).collection<RateLimitDocument>("rateLimits");
+}
+
 /**
  * Inserts a document whose _id the driver generates, and returns that id.
  *
@@ -133,6 +139,10 @@ function ensureIndexes(): Promise<void> {
         db.collection("tasks").createIndex({ userId: 1, createdAt: -1 }),
         db.collection("sessions").createIndex({ tokenHash: 1 }, { unique: true }),
         db.collection("sessions").createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 }),
+        db.collection("rateLimits").createIndex(
+          { expiresAt: 1 },
+          { expireAfterSeconds: 0 },
+        ),
       ]);
     })().catch((error: unknown) => {
       // Never let a transient failure here take down the app; the fallback

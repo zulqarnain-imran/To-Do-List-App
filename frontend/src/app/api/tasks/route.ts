@@ -7,10 +7,10 @@ import { TASK_CAP } from "@/lib/constants";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-/** GET /api/tasks — every non-archived task for the signed-in user. */
-export async function GET() {
+/** GET /api/tasks â€” every non-archived task for the signed-in user. */
+export async function GET(request: Request) {
   try {
-    const user = await requireUser();
+    const user = await requireUser(request);
     const tasks = await getTasks();
 
     const docs = await tasks
@@ -31,7 +31,7 @@ export async function GET() {
 /** POST /api/tasks */
 export async function POST(request: Request) {
   try {
-    const user = await requireUser();
+    const user = await requireUser(request);
     const body = taskCreateSchema.parse(await readJson(request));
 
     // The defaults already travel on the session, so choosing one is free.

@@ -1,6 +1,7 @@
 import { ObjectId } from "mongodb";
 import { getUsers } from "@/lib/mongodb";
-import { handle, json, requireUser, fail , readJson} from "@/lib/api";
+import { handle, json, requireUser, fail , readJson, enforceRateLimit} from "@/lib/api";
+import { rateLimitReset, RULES } from "@/lib/rate-limit";
 import { profileUpdateSchema, changePasswordSchema } from "@/lib/validations";
 import { hashPassword, verifyPassword } from "@/lib/password";
 import { syncSessionIdentity, destroyAllSessions } from "@/lib/session";
@@ -10,9 +11,9 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /** GET /api/profile */
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const user = await requireUser();
+    const user = await requireUser(request);
     return json({
       profile: {
         id: user.id,
@@ -30,7 +31,7 @@ export async function GET() {
 /** PATCH /api/profile — display name and avatar. */
 export async function PATCH(request: Request) {
   try {
-    const user = await requireUser();
+    const user = await requireUser(request);
     const body = profileUpdateSchema.parse(await readJson(request));
 
     if (Object.keys(body).length === 0) {
@@ -88,7 +89,19 @@ export async function PATCH(request: Request) {
  */
 export async function POST(request: Request) {
   try {
-    const user = await requireUser();
+    const user = await requireUser(request);
+
+    // Someone holding a stolen session must not be able to keep guessing the
+    // current password, which would let them lock the real owner out or take
+    // the account over for good.
+    const blocked = await enforceRateLimit(
+      "password:change",
+      user.id,
+      RULES.passwordChangePerUser,
+      "Too many password change attempts. Please try again shortly.",
+    );
+    if (blocked) return blocked;
+
     const body = changePasswordSchema.parse(await readJson(request));
 
     const users = await getUsers();
@@ -108,6 +121,9 @@ export async function POST(request: Request) {
         },
       },
     );
+
+    // The password just proved correct, so the guessing counter is meaningless.
+    await rateLimitReset("password:change", user.id);
 
     const revoked = await destroyAllSessions(user.id);
 

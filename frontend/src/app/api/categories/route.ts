@@ -8,9 +8,9 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /** GET /api/categories */
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const user = await requireUser();
+    const user = await requireUser(request);
     const categories = await getCategories();
     const docs = await categories.find({ userId: user.id }).sort({ createdAt: 1 }).toArray();
     return json({ categories: docs.map(serializeCategory) });
@@ -22,7 +22,7 @@ export async function GET() {
 /** POST /api/categories */
 export async function POST(request: Request) {
   try {
-    const user = await requireUser();
+    const user = await requireUser(request);
     const body = categoryCreateSchema.parse(await readJson(request));
 
     const categories = await getCategories();

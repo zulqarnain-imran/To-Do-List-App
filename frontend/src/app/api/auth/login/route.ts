@@ -2,7 +2,12 @@ import { NextResponse } from "next/server";
 import { getUsers } from "@/lib/mongodb";
 import { verifyPassword } from "@/lib/password";
 import { createSession } from "@/lib/session";
-import { handle, fail, json , readJson} from "@/lib/api";
+import { handle, fail, json, readJson, enforceRateLimit } from "@/lib/api";
+import {
+  clientIp,
+  rateLimitReset,
+  RULES,
+} from "@/lib/rate-limit";
 import { loginSchema } from "@/lib/validations";
 import { DEFAULT_SETTINGS } from "@/lib/types";
 
@@ -20,6 +25,23 @@ const DUMMY_HASH = "$2b$12$vpUDLr/Si4FKpWnaYYerzOsDNkei9XiH4eBPZr5DD1CByWpbq9wHq
 export async function POST(request: Request) {
   try {
     const body = loginSchema.parse(await readJson(request));
+
+    // Throttling happens before any database or bcrypt work, so a brute-force
+    // run costs the attacker nothing but the request itself.
+    //
+    // The per-account rule is keyed on the submitted address, which the client
+    // cannot forge, and it is the rule that actually contains credential
+    // stuffing. The per-IP rule is a loose backstop against one machine
+    // spraying many addresses.
+    const blocked =
+      (await enforceRateLimit(
+        "login:account",
+        body.email,
+        RULES.loginPerAccount,
+        "Too many failed sign-in attempts. Please try again shortly.",
+      )) ??
+      (await enforceRateLimit("login:ip", clientIp(request), RULES.loginPerIp));
+    if (blocked) return blocked;
 
     const users = await getUsers();
     const user = await users.findOne({ email: body.email });
@@ -45,6 +67,11 @@ export async function POST(request: Request) {
       return fail("Incorrect email or password", 401);
     }
 
+    // A correct password clears the account's counter, so genuine sign-ins
+    // never accumulate towards the limit. Only consecutive failures do, which is
+    // what stops a guessing run without punishing someone who fumbled a typo.
+    await rateLimitReset("login:account", body.email);
+
     const sessionUser = {
       id: user._id.toHexString(),
       name: user.name,
@@ -54,7 +81,6 @@ export async function POST(request: Request) {
     };
 
     await createSession(sessionUser);
-    console.error("[api:auth/login] succeeded");
 
     return json({ user: sessionUser });
   } catch (error) {

@@ -16,7 +16,7 @@ export const dynamic = "force-dynamic";
  */
 export async function PATCH(request: Request) {
   try {
-    const user = await requireUser();
+    const user = await requireUser(request);
     const body = settingsUpdateSchema.parse(await readJson(request));
 
     if (Object.keys(body).length === 0) {

@@ -135,7 +135,12 @@ export const profileUpdateSchema = z.object({
   avatar: z
     .string()
     .trim()
-    .max(500_000, "Image is too large")
+    // The avatar is a base64 data URL, so the character count is roughly three
+    // quarters of the byte count. The ceiling is deliberately well under a
+    // single MongoDB document limit: the same string is copied onto every one
+    // of the account's session rows, so a large allowance here is stored once
+    // per active device.
+    .max(300_000, "Image is too large")
     .refine(
       (value) =>
         value === "" || /^data:image\/(png|jpeg|webp|gif);base64,[A-Za-z0-9+/=]+$/.test(value),

@@ -1,5 +1,6 @@
 import { Inter } from "next/font/google";
 import type { Metadata, Viewport } from "next";
+import { headers } from "next/headers";
 import { ServiceWorkerRegistrar } from "@/components/ServiceWorkerRegistrar";
 import "./globals.css";
 
@@ -52,6 +53,12 @@ export const viewport: Viewport = {
  *
  * Rendered in <head> and synchronous on purpose: waiting for React to hydrate
  * would show a white flash for anyone who chose dark mode.
+ *
+ * The body is a fixed string, so its hash never changes, but a script injected
+ * through dangerouslySetInnerHTML does not receive the per-response nonce that
+ * Next.js stamps onto its own scripts. Without passing the nonce in explicitly,
+ * the Content Security Policy in src/middleware.ts would block this script and
+ * dark mode would flash white on every load.
  */
 const themeScript = `
 (function () {
@@ -65,13 +72,19 @@ const themeScript = `
 })();
 `;
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
+  // Minted by the middleware for this request.
+  const nonce = (await headers()).get("x-nonce") ?? undefined;
+
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
-        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+        <script
+          nonce={nonce}
+          dangerouslySetInnerHTML={{ __html: themeScript }}
+        />
       </head>
       <body className={`${inter.variable} antialiased font-sans`}>
         {children}

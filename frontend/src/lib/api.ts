@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { ZodError } from "zod";
 import { getSessionUser } from "./session";
 import { firstIssue } from "./validations";
+import { apiRequestCeiling, clientIp, rateLimit, type RateLimitRule } from "./rate-limit";
 import type { SessionUser } from "./types";
 
 /** Error type that carries an HTTP status through to the route handler. */
@@ -9,6 +10,8 @@ export class ApiError extends Error {
   constructor(
     readonly status: number,
     message: string,
+    /** Extra response headers, e.g. Retry-After on a 429. */
+    readonly headers?: Record<string, string>,
   ) {
     super(message);
     this.name = "ApiError";
@@ -24,13 +27,61 @@ export function fail(message: string, status = 400): NextResponse {
 }
 
 /**
+ * A 429 with a Retry-After header.
+ *
+ * The header is the part that matters: it is how a well-behaved client knows
+ * when to come back, so the throttle is a pause rather than a dead end.
+ */
+export function tooMany(retryAfterSeconds: number, message?: string): NextResponse {
+  return NextResponse.json(
+    { error: message ?? "Too many attempts. Please wait and try again." },
+    { status: 429, headers: { "Retry-After": String(retryAfterSeconds) } },
+  );
+}
+
+/**
+ * Applies a rate limit and reports whether the request may proceed.
+ *
+ * Returns null when the request is within the rule, so a route reads as
+ * `if (const blocked = await enforceRateLimit(...)) return blocked;`. A
+ * counter that only moves on attempts that actually reach the rule keeps the
+ * check to a single atomic database operation.
+ */
+export async function enforceRateLimit(
+  bucket: string,
+  identifier: string,
+  rule: RateLimitRule,
+  message?: string,
+): Promise<NextResponse | null> {
+  const verdict = await rateLimit(bucket, identifier, rule);
+  if (verdict.ok) return null;
+  return tooMany(verdict.retryAfterSeconds, message);
+}
+
+/**
  * Returns the signed-in user or throws 401.
  *
  * The identity always comes from the server-side session cookie. No route ever
  * reads a userId from the request body or query string, so a user cannot reach
  * another account's data by editing a payload.
+ *
+ * When the incoming Request is passed, a cheap in-memory ceiling also applies.
+ * That ceiling is a guard against wasted database operations from a runaway
+ * client, not an authentication control; the per-request work it adds is a
+ * single Map lookup and no query.
  */
-export async function requireUser(): Promise<SessionUser> {
+export async function requireUser(request?: Request): Promise<SessionUser> {
+  if (request) {
+    const verdict = apiRequestCeiling(clientIp(request));
+    if (!verdict.ok) {
+      throw new ApiError(
+        429,
+        "Too many requests. Please slow down.",
+        { "Retry-After": String(verdict.retryAfterSeconds) },
+      );
+    }
+  }
+
   const user = await getSessionUser();
   if (!user) throw new ApiError(401, "Unauthorized");
   return user;
@@ -103,7 +154,12 @@ function isMongoError(error: unknown, ...names: string[]): boolean {
  * stack traces and driver internals stay server side.
  */
 export function handle(error: unknown, context = "request"): NextResponse {
-  if (error instanceof ApiError) return fail(error.message, error.status);
+  if (error instanceof ApiError) {
+    return NextResponse.json(
+      { error: error.message },
+      { status: error.status, headers: error.headers },
+    );
+  }
 
   if (error instanceof ZodError) {
     return fail(firstIssue(error), 400);

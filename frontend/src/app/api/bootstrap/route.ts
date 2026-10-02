@@ -17,9 +17,9 @@ export const dynamic = "force-dynamic";
  *
  * Categories and tasks are read in parallel because they are independent.
  */
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const user = await requireUser();
+    const user = await requireUser(request);
 
     const [categories, tasks] = await Promise.all([
       getCategories(),
